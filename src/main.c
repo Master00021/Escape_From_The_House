@@ -3,22 +3,28 @@
 #include <string.h>
 #include <unistd.h>
 
-void clean_buffer() {
+void clear_buffer() {
     int character;
     while ((character = getchar()) != '\n' && character != EOF) {}
 }
 
-void Introduction() {
-	system("clear");
+void clear_console() {
+    printf("\033[H\033[J");
+    fflush(stdout);
+}
 
-	printf("Were am I?");
+void play_introduction() {
+	clear_console();
+
+	printf("Where am I?");
 	getchar();
+	
 	printf("I need to get out of here!");
 	getchar();
 }
 
-void Conclusion() {
-	system("clear");
+void play_conclusion() {
+	clear_console();
 
 	printf("I'm finally free!");
 	getchar();
@@ -33,22 +39,13 @@ void Conclusion() {
 #define ROOM_SEVEN  6 
 #define ROOM_EIGHT  7 
 #define ROOM_NINE   8 
+
 #define FINAL_ROOM  9 
 
 #define MAX_ROOMS 9
 #define MAX_DIALOGUES_PER_ROOM 5
 #define MAX_ADJOINING_ROOMS_PER_ROOM 4
 #define MAX_OBSTACLES_PER_ROOM 2
-
-short houseRooms;
-
-void set_room(short *houseRooms, short newRoom) {
-    *houseRooms = newRoom;
-}
-
-void reset_rooms(short *houseRooms) {
-    *houseRooms = 0;
-}
 
 typedef struct {
 	char item[20];
@@ -59,10 +56,6 @@ typedef struct {
 } Room;
 
 void init_rooms_data(Room *roomData) {
-
-	// TODO - Usar los dialoguesFlags para definir si se puede o no ir a una habitación 
-	// en runtime, ej, antes de tomar un item, esta en 0, luego de tomarlo, esta en 1.
-
 	Room roomOne = {
 		.item = { "" },
 		.obstacle = { "" },
@@ -103,7 +96,7 @@ void init_rooms_data(Room *roomData) {
 		.item = { "hammer" },
 		.obstacle = { "" },
 		.dialogues = {
-			"I see a hammer, maybe i can use it to break something...",
+			"I see a hammer, maybe I can use it to break something...",
 			"I see a door in the down direction...",
 			"There's nothing else in this room..."
 		},
@@ -127,7 +120,7 @@ void init_rooms_data(Room *roomData) {
 		.item = { "" },
 		.obstacle = { "key" },
 		.dialogues = {
-			"The door in the down direction is blocked, i have to find a key!",
+			"The door in the down direction is blocked, I have to find a key!",
 			"I see a door in the up, left and down direction..."
 		},
 		.dialoguesFlags = { 1, 1, 0, 0, 0 },
@@ -161,7 +154,7 @@ void init_rooms_data(Room *roomData) {
 		.obstacle = { "" },
 		.dialogues = {
 			"I see the exit door in the right direction!",
-			"Finally, i can escape this house!"
+			"Finally, I can escape this house!"
 		},
 		.dialoguesFlags = { 1, 1, 0, 0, 0 },
 		.adjoiningRooms = { ROOM_SIX, 0, FINAL_ROOM, 0 }
@@ -178,45 +171,56 @@ void init_rooms_data(Room *roomData) {
 	roomData[ROOM_NINE] = roomNine;
 }
 
+void set_room(short *houseRooms, short newRoom) {
+    *houseRooms = newRoom;
+}
+
 void print_room_dialogue(Room *roomsData, short currentRoom) {
 	short dialogueFlagsLenght = sizeof(roomsData[currentRoom].dialoguesFlags) / sizeof(roomsData[currentRoom].dialoguesFlags[0]);
 
 	for (int i = 0; i < dialogueFlagsLenght; i++) {
-		if (roomsData[currentRoom].dialoguesFlags[i] == 1) {
-			printf("%s", roomsData[currentRoom].dialogues[i]);
-			getchar();
-		}
+		if (roomsData[currentRoom].dialoguesFlags[i] != 1) {
+			continue;
+		}	
+
+		printf("%s", roomsData[currentRoom].dialogues[i]);
+		getchar();
 	}
 }
 
-short try_move_to(Room *roomsData, short *currentRoom, char direction[]) {
-	const char *directions[4] = { "up", "down", "right", "left" };
+	short try_move_to(Room *roomsData, short *currentRoom, char direction[]) {
+		const char *directions[4] = { "up", "down", "right", "left" };
 
-	short nextRoom = -1;
+		short nextRoom = -1;
 
-	for (int i = 0; i < MAX_ADJOINING_ROOMS_PER_ROOM; i++) {
-		if (roomsData[*currentRoom].adjoiningRooms[i] != 0) {
-			if (strcmp(directions[i], direction) == 0) {
-				nextRoom = roomsData[*currentRoom].adjoiningRooms[i];
-				break;
+		for (int i = 0; i < MAX_ADJOINING_ROOMS_PER_ROOM; i++) {
+			if (roomsData[*currentRoom].adjoiningRooms[i] == 0) {
+				continue;
 			}
+
+			if (strcmp(directions[i], direction) != 0) {
+				continue;
+			}
+
+			nextRoom = roomsData[*currentRoom].adjoiningRooms[i];
+			break;
 		}
-	}
 
-	if (nextRoom != -1) {
-		set_room(&houseRooms, nextRoom);
-		return 1;
-	}
+		if (nextRoom != -1) {
+			set_room(*&currentRoom, nextRoom);
+			return 1;
+		}
 
-	return 0;
-}
+		return 0;
+	}
 
 short try_take_item(Room *roomsData, short *currentRoom, char item[]) {
 	if (strcmp(roomsData[*currentRoom].item, item) == 0) {
 		roomsData[*currentRoom].dialoguesFlags[0] = 0;
 
-		system("clear");
-		printf("I taked the %s item.\n", item);
+		clear_console();
+
+		printf("I took the %s item.\n", item);
 		getchar();
 
 		return 1;
@@ -229,30 +233,33 @@ short try_use_item(Room *roomsData, short *currentRoom, char item[]) {
 	short lenght = sizeof(roomsData[*currentRoom].obstacle) / sizeof(roomsData[*currentRoom].obstacle[0]);
 
 	for (int i = 0; i < lenght; i++) {
-		if (strcmp(roomsData[*currentRoom].obstacle[i], item) == 0) {
-			if (strcmp(roomsData[*currentRoom].obstacle[i], "cheese") == 0) {
-				roomsData[*currentRoom].dialoguesFlags[0] = 0;
-				roomsData[*currentRoom].adjoiningRooms[1] = ROOM_EIGHT; 
-			}
-			else if (strcmp(roomsData[*currentRoom].obstacle[i], "hammer") == 0) {
-				roomsData[*currentRoom].dialoguesFlags[1] = 0;
-				roomsData[*currentRoom].adjoiningRooms[2] = ROOM_SIX;
-			}
-			else if (strcmp(roomsData[*currentRoom].obstacle[i], "key") == 0) {
-				roomsData[*currentRoom].dialoguesFlags[0] = 0;
-				roomsData[*currentRoom].adjoiningRooms[1] = ROOM_NINE;
-			}
-
-			return 1;
-
+		if (strcmp(roomsData[*currentRoom].obstacle[i], item) != 0) {
+			continue;
 		}
+
+		if (strcmp(roomsData[*currentRoom].obstacle[i], "cheese") == 0) {
+			roomsData[*currentRoom].dialoguesFlags[0] = 0;
+			roomsData[*currentRoom].adjoiningRooms[1] = ROOM_EIGHT; 
+		}
+		else if (strcmp(roomsData[*currentRoom].obstacle[i], "hammer") == 0) {
+			roomsData[*currentRoom].dialoguesFlags[1] = 0;
+			roomsData[*currentRoom].adjoiningRooms[2] = ROOM_SIX;
+		}
+		else if (strcmp(roomsData[*currentRoom].obstacle[i], "key") == 0) {
+			roomsData[*currentRoom].dialoguesFlags[0] = 0;
+			roomsData[*currentRoom].adjoiningRooms[1] = ROOM_NINE;
+		}
+
+		return 1;
 	}
 
 	return 0;
 }
 
 int main() {
-	Introduction();
+	play_introduction();
+
+	short houseRooms;
 
 	set_room(&houseRooms, ROOM_ONE);
 	
@@ -261,7 +268,7 @@ int main() {
 	init_rooms_data(roomsData);
 
 	while (houseRooms != FINAL_ROOM) {
-		system("clear");
+		clear_console();
 
 		print_room_dialogue(roomsData, houseRooms);
 
@@ -271,18 +278,18 @@ int main() {
 
 		scanf("%s", playerAction);
 
-		clean_buffer();
+		clear_buffer();
 
 		if (try_move_to(roomsData, &houseRooms, playerAction)) {}
 		else if (try_take_item(roomsData, &houseRooms, playerAction)) {}
 		else if (try_use_item(roomsData, &houseRooms, playerAction)) {}
 		else {
-			system("clear");
-			printf("That action it's not defined in this context.\n");
+			clear_console();
+			printf("That action, it's not defined in this context.\n");
 			getchar();
 		}
 	}
 
-	Conclusion();
+	play_conclusion();
 	return 0;
 }
